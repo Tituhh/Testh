@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎬 TMDB Blogger Post Generator</title>
+<style>
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: #f3f5fa;
+    padding: 20px;
+  }
+  .container {
+    background: #fff;
+    padding: 25px;
+    border-radius: 16px;
+    max-width: 720px;
+    margin: auto;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+  h2 {
+    text-align: center;
+    color: #222;
+    margin-bottom: 15px;
+  }
+  input, textarea, button {
+    width: 100%;
+    margin: 8px 0;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 15px;
+  }
+  button {
+    background: #007BFF;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+  }
+  button:hover { background: #0056b3; }
+  #searchResults div {
+    background: #f9f9f9;
+    padding: 10px;
+    margin-top: 5px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  #searchResults div:hover { background: #e3f2fd; }
+  #output {
+    white-space: pre-wrap;
+    background: #fafafa;
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    margin-top: 15px;
+  }
+  img {
+    max-width: 100%;
+    border-radius: 10px;
+    margin: 10px 0;
+  }
+  #status {
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>🎬 TMDB Blogger Post Generator</h2>
+
+  <div id="status">Checking backend connection...</div>
+
+  <input type="text" id="searchInput" placeholder="Enter movie or TV show name...">
+  <div id="searchResults"></div>
+
+  <input type="text" id="title" placeholder="Title">
+  <textarea id="overview" placeholder="Overview"></textarea>
+  <input type="text" id="release_date" placeholder="Release Date">
+  <input type="text" id="rating" placeholder="Rating">
+  <input type="text" id="genres" placeholder="Genres">
+  <input type="text" id="poster" placeholder="Poster URL">
+  <img id="preview" style="display:none"/>
+
+  <input type="text" id="download_label" placeholder="Download Label (e.g. Watch Now)">
+  <input type="text" id="download_url" placeholder="Download URL (e.g. https://example.com)">
+
+  <button onclick="generateHTML()">Generate HTML</button>
+  <button onclick="copyHTML()">Copy HTML</button>
+  <button onclick="adminLogin()">🔐 Admin Login</button>
+  <button id="publishBtn" onclick="publishPost()" disabled>🚀 Publish</button>
+
+  <div id="output" contenteditable="true"></div>
+</div>
+
+<script>
+const apiKey = "c9ac3637696d089a9b1a1781518778a0";
+const API_URL = "https://testh-psi.vercel.app"; // 🟢 Replace with your deployed backend URL
+
+let adminEmail = "";
+let adminToken = "";
+let backendConnected = false;
+let isAdmin = false;
+
+// ✅ Check backend on load
+window.addEventListener("load", checkBackend);
+
+async function checkBackend() {
+  const status = document.getElementById("status");
+  try {
+    const res = await fetch(`${API_URL}/ping`);
+    const data = await res.json();
+    if (data.status === "ok") {
+      backendConnected = true;
+      status.innerHTML = "🟢 <span style='color:green;'>Backend Connected</span>";
+    } else throw new Error("Ping failed");
+  } catch {
+    backendConnected = false;
+    status.innerHTML = "🔴 <span style='color:red;'>Backend Not Connected</span>";
+    document.getElementById("publishBtn").disabled = true;
+  }
+}
+
+// 🎯 Search movie
+document.getElementById('searchInput').addEventListener('input', async e => {
+  const query = e.target.value.trim();
+  const results = document.getElementById('searchResults');
+  if (query.length < 2) return results.innerHTML = "";
+
+  const res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${apiKey}&query=${encodeURIComponent(query)}`);
+  const data = await res.json();
+
+  results.innerHTML = data.results.slice(0, 5).map(item => `
+    <div onclick="selectItem(${item.id}, '${item.media_type}')">
+      ${item.title || item.name} (${(item.release_date || item.first_air_date || 'N/A').slice(0,4)})
+    </div>
+  `).join('');
+});
+
+// 🧠 Select TMDB item
+async function selectItem(id, type) {
+  const res = await fetch(`https://api.themoviedb.org/3/${type}/${id}?api_key=${apiKey}&language=en-US`);
+  const data = await res.json();
+
+  document.getElementById('title').value = data.title || data.name || '';
+  document.getElementById('overview').value = data.overview || '';
+  document.getElementById('release_date').value = data.release_date || data.first_air_date || '';
+  document.getElementById('rating').value = data.vote_average || '';
+  document.getElementById('genres').value = (data.genres || []).map(g => g.name).join(', ');
+  const poster = data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : '';
+  document.getElementById('poster').value = poster;
+  document.getElementById('preview').src = poster;
+  document.getElementById('preview').style.display = poster ? "block" : "none";
+  document.getElementById('searchResults').innerHTML = "";
+  document.getElementById('searchInput').value = "";
+}
+
+// 🧩 Generate HTML
+function generateHTML() {
+  const title = document.getElementById('title').value;
+  const overview = document.getElementById('overview').value;
+  const release_date = document.getElementById('release_date').value;
+  const rating = document.getElementById('rating').value;
+  const genres = document.getElementById('genres').value;
+  const poster = document.getElementById('poster').value;
+  const downloadLabel = document.getElementById('download_label').value;
+  const downloadUrl = document.getElementById('download_url').value;
+
+  const html = `
+<div style="background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);padding:20px;max-width:600px;margin:auto;">
+  <h2 style="text-align:center;color:#111;">${title}</h2>
+  <img src="${poster}" alt="${title}" style="width:100%;border-radius:12px;margin-bottom:15px;">
+  <p style="text-align:center;"><b>Release:</b> ${release_date}</p>
+  <p style="text-align:center;"><b>Rating:</b> ${rating}/10 ⭐</p>
+  <p style="text-align:center;"><b>Genres:</b> ${genres}</p>
+  <p style="text-align:justify;line-height:1.6;">${overview}</p>
+  <div style="text-align:center;margin-top:20px;">
+    <a href="${downloadUrl}" target="_blank" style="display:inline-block;background:#007BFF;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">
+      ${downloadLabel || "▶ Watch / Download"}
+    </a>
+  </div>
+</div>`.trim();
+
+  document.getElementById('output').innerText = html;
+}
+
+// 📋 Copy HTML
+function copyHTML() {
+  const text = document.getElementById('output').innerText;
+  navigator.clipboard.writeText(text);
+  alert("✅ HTML copied!");
+}
+
+// 🔐 Admin login
+function adminLogin() {
+  const email = prompt("Enter Admin Email:");
+  const token = prompt("Enter Admin Token:");
+  if (!email || !token) return alert("❌ Enter both email and token!");
+
+  adminEmail = email;
+  adminToken = token;
+  isAdmin = true;
+
+  if (backendConnected) document.getElementById("publishBtn").disabled = false;
+  alert(`✅ Logged in as ${email}`);
+}
+
+// 🚀 Publish
+async function publishPost() {
+  if (!isAdmin) return alert("❌ Login first!");
+  if (!backendConnected) return alert("❌ Backend not connected!");
+
+  const html = document.getElementById("output").innerText;
+
+  const res = await fetch(`${API_URL}/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      subject: document.getElementById('title').value || "TMDB Post",
+      html,
+      token: adminToken
+    })
+  });
+
+  const data = await res.json();
+  if (res.ok) alert("✅ Post published!");
+  else alert("❌ Failed: " + (data.error || "Unknown error"));
+}
+</script>
+</body>
+</html>
